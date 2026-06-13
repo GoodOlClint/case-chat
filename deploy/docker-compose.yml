@@ -1,0 +1,131 @@
+# case-chat — cloud deployment stack (RTX 5090 box).
+#
+# Serving (default):  docker compose --env-file .env up -d
+#   qdrant, tei (embeddings, GPU), vllm (DiffusionGemma, GPU), web, cloudflared
+# One-time index build:  docker compose --env-file .env --profile build run --rm builder
+#   (brings up pg-staging, restores the dump, populates Qdrant + SQLite)
+#
+# Only `web` is exposed — and only to cloudflared on the compose network. No
+# host ports are published; the Cloudflare Tunnel is the single ingress.
+# Requires the NVIDIA Container Toolkit on the host.
+
+name: case-chat
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    expose: ["6333"]
+
+  # Embeddings — Qwen3-Embedding-4B, OpenAI-compatible /v1/embeddings (2560-dim).
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.5
+    restart: unless-stopped
+    command: ["--model-id", "${EMBEDDINGS_MODEL:-Qwen/Qwen3-Embedding-4B}", "--port", "80", "--auto-truncate"]
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - tei_data:/data
+    expose: ["80"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Chat model — DiffusionGemma via the official vLLM image (we run it, not build it).
+  # NOTE: tune VLLM_MODEL (4-bit quant repo id), VLLM_MAX_MODEL_LEN, and the GPU
+  # fraction so vLLM + TEI both fit the 5090's 32GB.
+  vllm:
+    image: vllm/vllm-openai:gemma
+    restart: unless-stopped
+    ipc: host
+    command: >
+      --model ${VLLM_MODEL}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-32768}
+      --gpu-memory-utilization ${VLLM_GPU_FRACTION:-0.6}
+      --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4
+      --host 0.0.0.0 --port 8000
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    expose: ["8000"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CASECHAT_VLLM_BASE_URL: http://vllm:8000/v1
+      CASECHAT_VLLM_MODEL: ${VLLM_MODEL}
+      CASECHAT_VLLM_SEND_CHAT_TEMPLATE_KWARGS: "true"
+      CASECHAT_EMBEDDINGS_BASE_URL: http://tei/v1
+      CASECHAT_EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-Qwen/Qwen3-Embedding-4B}
+      CASECHAT_QDRANT_URL: http://qdrant:6333
+      CASECHAT_SYNTHETIC_CORPUS_PATH: /corpus
+      CASECHAT_CASEDATA_SQLITE_PATH: /data/fake_case.sqlite3
+      CASECHAT_WEB_COOKIE_SECURE: "true"
+    volumes:
+      - ${SYNTHETIC_CORPUS_PATH}:/corpus:ro
+      - casedata:/data
+    expose: ["8080"]
+    depends_on: [qdrant, tei, vllm]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
+    depends_on: [web]
+
+  # ---- build profile (one-time index population) -------------------------
+  pg-staging:
+    image: pgvector/pgvector:pg17
+    profiles: ["build"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: knowledgedb
+    volumes:
+      - pg_staging_data:/var/lib/postgresql/data
+    expose: ["5432"]
+
+  builder:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    profiles: ["build"]
+    env_file: .env
+    entrypoint: ["bash", "deploy/build_indexes.sh"]
+    environment:
+      CASECHAT_KNOWLEDGEDB_STAGING_DSN: postgresql://postgres:postgres@pg-staging:5432/knowledgedb
+      CASECHAT_EMBEDDINGS_BASE_URL: http://tei/v1
+      CASECHAT_EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-Qwen/Qwen3-Embedding-4B}
+      CASECHAT_QDRANT_URL: http://qdrant:6333
+      CASECHAT_SYNTHETIC_CORPUS_PATH: /corpus
+      CASECHAT_CASEDATA_SQLITE_PATH: /data/fake_case.sqlite3
+    volumes:
+      - ${DUMP_PATH}:/dump/knowledgedb.dump:ro
+      - ${SYNTHETIC_CORPUS_PATH}:/corpus:ro
+      - casedata:/data
+    depends_on: [qdrant, tei, pg-staging]
+
+volumes:
+  qdrant_data:
+  tei_data:
+  hf_cache:
+  casedata:
+  pg_staging_data:
