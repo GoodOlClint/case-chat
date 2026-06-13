@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>case-chat</title>
+<style>
+  :root { --bg:#f7f7f8; --fg:#1f2329; --muted:#6b7280; --accent:#2563eb; --card:#fff; --line:#e5e7eb; --side:#1118270d; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  .app { display:flex; height:100vh; }
+  /* sidebar */
+  .sidebar { width:16rem; flex:none; background:var(--card); border-right:1px solid var(--line); display:flex; flex-direction:column; overflow:hidden; }
+  .brand { font-weight:700; padding:.9rem 1rem; border-bottom:1px solid var(--line); }
+  .nav { padding:.5rem; display:flex; flex-direction:column; gap:.25rem; }
+  .nav button { text-align:left; font:inherit; font-size:.9rem; padding:.5rem .6rem; border:none; background:none; border-radius:8px; cursor:pointer; color:var(--fg); }
+  .nav button:hover { background:var(--side); }
+  .nav button.active { background:#eef2ff; color:var(--accent); font-weight:600; }
+  .chats { display:flex; flex-direction:column; min-height:0; max-height:48%; border-top:1px solid var(--line); }
+  .chats-head { display:flex; align-items:center; padding:.5rem .8rem .3rem; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .chats-head .iconbtn { margin-left:auto; font:inherit; font-size:.72rem; border:1px solid var(--line); background:#fff; border-radius:6px; padding:.15rem .45rem; cursor:pointer; color:var(--accent); }
+  .chatlist { overflow:auto; padding:0 .5rem .5rem; }
+  .chatitem { display:flex; align-items:center; gap:.3rem; font-size:.82rem; padding:.35rem .5rem; border-radius:6px; cursor:pointer; color:#374151; }
+  .chatitem:hover { background:var(--side); }
+  .chatitem.active { background:#eef2ff; color:var(--accent); }
+  .chatitem .t { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chatitem .del { opacity:0; border:none; background:none; cursor:pointer; color:var(--muted); font-size:.9rem; padding:0 .2rem; }
+  .chatitem:hover .del { opacity:1; }
+  .filelist { overflow:auto; padding:.25rem .5rem 1rem; flex:1; }
+  .group { margin-top:.6rem; }
+  .ghead { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); padding:.2rem .4rem; }
+  .file { display:block; font-size:.82rem; padding:.28rem .5rem; border-radius:6px; color:#374151; text-decoration:none; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .file:hover { background:var(--side); }
+  .file.active { background:#eef2ff; color:var(--accent); }
+  .who { font-size:.72rem; color:var(--muted); padding:.6rem 1rem; border-top:1px solid var(--line); }
+  /* content */
+  .content { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .topbar { display:flex; align-items:center; gap:.5rem; padding:.55rem .9rem; background:var(--card); border-bottom:1px solid var(--line); }
+  .topbar h2 { font-size:.95rem; margin:0; }
+  .topbar .sp { margin-left:auto; }
+  .topbar button { font-size:.8rem; padding:.3rem .6rem; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; }
+  .view { flex:1; display:flex; flex-direction:column; min-height:0; }
+  .view[hidden] { display:none; }
+  /* chat */
+  #log { flex:1; overflow:auto; padding:1rem; }
+  .wrap { max-width:48rem; margin:0 auto; }
+  .msg { margin:.75rem 0; }
+  .msg .role { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:.2rem; }
+  .bubble { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.7rem .9rem; line-height:1.45; }
+  .user .bubble { background:#eef2ff; border-color:#dbe1ff; white-space:pre-wrap; }
+  details.think { margin:.3rem 0; border:1px solid var(--line); border-radius:8px; background:#fafafa; }
+  details.think summary { cursor:pointer; font-size:.78rem; color:var(--muted); padding:.35rem .6rem; user-select:none; }
+  details.think .tt { padding:.2rem .7rem .6rem; font:.8rem/1.5 ui-monospace,Menlo,monospace; color:#475569; white-space:pre-wrap; border-top:1px dashed var(--line); }
+  .tools { margin:.4rem 0; display:flex; flex-direction:column; gap:.3rem; }
+  .tool { font-size:.8rem; color:#374151; background:#f3f4f6; border:1px solid var(--line); border-radius:8px; padding:.35rem .6rem; }
+  .tool code { color:var(--accent); }
+  .tool .res { color:var(--muted); }
+  .cites { margin-top:.5rem; border-top:1px dashed var(--line); padding-top:.4rem; }
+  .cites h4 { margin:.2rem 0; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .cite { font-size:.82rem; padding:.15rem 0; }
+  .badge { font-size:.68rem; padding:.05rem .35rem; border-radius:4px; margin-right:.35rem; }
+  .b-binding { background:#dcfce7; color:#166534; } .b-persuasive { background:#fef9c3; color:#854d0e; }
+  .b-non_authority { background:#f3f4f6; color:#4b5563; } .b-doc { background:#e0e7ff; color:#3730a3; }
+  a.docview, a.srcref { color:var(--accent); cursor:pointer; text-decoration:underline; }
+  .cite a.srcref { font-weight:500; }
+  .cite .num { color:var(--muted); font-variant-numeric:tabular-nums; margin-right:.15rem; }
+  sup.ref { color:var(--accent); cursor:pointer; font-size:.7em; font-weight:600; padding:0 .1em; line-height:0; }
+  sup.ref:hover { text-decoration:underline; }
+  /* markdown */
+  .bubble h1,.bubble h2,.bubble h3,.bubble h4 { margin:.6rem 0 .3rem; line-height:1.25; }
+  .bubble h1{font-size:1.25rem} .bubble h2{font-size:1.12rem} .bubble h3{font-size:1rem} .bubble h4{font-size:.92rem}
+  .bubble p { margin:.45rem 0; } .bubble ul,.bubble ol { margin:.4rem 0; padding-left:1.4rem; } .bubble li { margin:.15rem 0; }
+  .bubble code { background:#f0f0f0; padding:.05rem .3rem; border-radius:4px; font-size:.9em; }
+  .bubble pre { background:#0f172a; color:#e2e8f0; padding:.7rem; border-radius:8px; overflow:auto; }
+  .bubble pre code { background:none; color:inherit; padding:0; }
+  .bubble blockquote { border-left:3px solid var(--line); margin:.4rem 0; padding:.1rem .8rem; color:var(--muted); }
+  .bubble a { color:var(--accent); }
+  /* composer */
+  .composer { border-top:1px solid var(--line); background:var(--card); padding:.6rem; }
+  .composer .wrap { display:flex; gap:.5rem; }
+  textarea { flex:1; resize:none; padding:.6rem; border:1px solid var(--line); border-radius:8px; font:inherit; height:2.6rem; }
+  .send { padding:0 1.1rem; border:none; background:var(--accent); color:#fff; border-radius:8px; cursor:pointer; font-weight:600; }
+  .send:disabled { opacity:.5; cursor:default; }
+  .spin::after { content:"▋"; animation:blink 1s steps(2) infinite; } @keyframes blink { 50%{opacity:0} }
+  /* source reader */
+  .docbody { flex:1; overflow:auto; min-height:0; }
+  .docbody pre.raw { margin:0; padding:1.2rem; white-space:pre-wrap; word-break:break-word; font:.84rem/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .docbody .bubble { margin:1.2rem; }
+  .docbody .hint { padding:1.2rem; color:var(--muted); }
+  .passage { max-width:46rem; margin:0 auto; padding:1.4rem 1.2rem; line-height:1.62; font-size:.93rem; }
+  .passage p { margin:.55rem 0; }
+  .passage p:first-child { color:var(--muted); font-size:.85rem; }
+  .msgframe { width:100%; height:100%; border:none; display:block; background:#fff; }
+  .docmeta { color:var(--muted); font-size:.78rem; }
+  /* case facts */
+  .factsec { margin:.8rem 1.2rem; border:1px solid var(--line); border-radius:8px; background:var(--card); }
+  .factsec > summary { cursor:pointer; font-weight:600; padding:.55rem .8rem; user-select:none; }
+  .facts-inner { padding:.3rem .8rem .7rem; }
+  .frow { padding:.4rem .2rem; border-top:1px solid var(--line); font-size:.86rem; }
+  .frow:first-child { border-top:none; }
+  .frow .muted { color:var(--muted); }
+  .srcs { margin-top:.25rem; display:flex; flex-wrap:wrap; gap:.5rem; }
+  .srcs a { font-size:.74rem; }
+  .b-sev-high { background:#fee2e2; color:#991b1b; } .b-sev-medium { background:#fef9c3; color:#854d0e; }
+  .b-sev-low { background:#f3f4f6; color:#4b5563; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">case-chat</div>
+    <div class="nav">
+      <button data-view="chat" class="active">💬 Chat</button>
+      <button data-view="facts">📇 Case facts</button>
+      <button data-view="source">📁 Source data</button>
+    </div>
+    <div class="chats">
+      <div class="chats-head"><span>Chats</span><button class="iconbtn" id="newchat" title="New chat">＋ New</button></div>
+      <div class="chatlist" id="chatlist"></div>
+    </div>
+    <div class="filelist" id="filelist"></div>
+    <div class="who" id="who"></div>
+  </aside>
+  <div class="content">
+    <!-- CHAT VIEW -->
+    <section class="view" id="chatView">
+      <div class="topbar"><h2>Chat</h2><span class="sp"></span><button id="reset">New conversation</button></div>
+      <div id="log"></div>
+      <div class="composer"><div class="wrap">
+        <textarea id="input" placeholder="Ask about the Holcomb case, Arkansas law, behavioral patterns, scripture…" autofocus></textarea>
+        <button class="send" id="send">Send</button>
+      </div></div>
+    </section>
+    <!-- CASE FACTS VIEW -->
+    <section class="view" id="factsView" hidden>
+      <div class="topbar"><h2>Case facts</h2><span class="docmeta" id="factsCase"></span></div>
+      <div class="docbody" id="factsBody"><div class="hint">Loading…</div></div>
+    </section>
+    <!-- SOURCE VIEW -->
+    <section class="view" id="sourceView" hidden>
+      <div class="topbar"><h2 id="docName">Source data</h2><span class="docmeta" id="docPath"></span></div>
+      <div class="docbody" id="docBody"><div class="hint">Select a document from the left to view it.</div></div>
+    </section>
+  </div>
+</div>
+<script>
+const log = document.getElementById('log');
+const input = document.getElementById('input');
+const send = document.getElementById('send');
+const filelist = document.getElementById('filelist');
+const TYPE_LABELS = { apple_note:'Apple Notes', attachment_ocr:'Attachments (OCR)', email:'Emails',
+  court_document:'Court Documents', messages:'Messages', transcript:'Transcripts',
+  witness_statement:'Witness Statements', visitation_log:'Visitation Log' };
+
+fetch('/api/whoami').then(r => r.ok ? r.json() : null).then(d => { if (d) document.getElementById('who').textContent = 'signed in as ' + d.subject; });
+
+function el(cls, html){ const d=document.createElement('div'); d.className=cls; if(html!==undefined){ d.innerHTML=html; } return d; }
+function esc(s){ return (s??'').toString().replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+// ---- conversations (saved chat history) ----
+let convId = localStorage.getItem('cc_conv') || null;
+function setConv(id){ convId = id; if (id) localStorage.setItem('cc_conv', id); else localStorage.removeItem('cc_conv'); }
+
+async function loadChats(){
+  const r = await fetch('/api/conversations'); if (!r.ok) return;
+  const list = (await r.json()).conversations || [];
+  const cl = document.getElementById('chatlist'); cl.innerHTML = '';
+  list.forEach(c => {
+    const it = el('chatitem' + (c.id===convId ? ' active' : ''));
+    const t = el('t'); t.textContent = c.title; t.title = c.title; t.onclick = () => openChat(c.id);
+    const del = document.createElement('button'); del.className='del'; del.textContent='✕'; del.title='Delete';
+    del.onclick = (e) => { e.stopPropagation(); deleteChat(c.id); };
+    it.appendChild(t); it.appendChild(del); cl.appendChild(it);
+  });
+}
+async function ensureConv(){
+  if (convId) return convId;
+  const r = await fetch('/api/conversations/new', {method:'POST'});
+  setConv((await r.json()).id); return convId;
+}
+async function newChat(){
+  const r = await fetch('/api/conversations/new', {method:'POST'});
+  setConv((await r.json()).id); log.innerHTML=''; showView('chat'); loadChats(); input.focus();
+}
+async function openChat(id){
+  const r = await fetch('/api/conversations/' + encodeURIComponent(id));
+  if (!r.ok){ if (id===convId){ setConv(null); } return; }
+  const conv = await r.json(); setConv(conv.id); log.innerHTML='';
+  conv.messages.forEach(m => m.role==='user' ? addUser(m.content) : renderStoredAssistant(m));
+  showView('chat'); loadChats(); log.scrollTop = log.scrollHeight;
+}
+async function deleteChat(id){
+  await fetch('/api/conversations/' + encodeURIComponent(id), {method:'DELETE'});
+  if (id===convId){ setConv(null); log.innerHTML=''; }
+  loadChats();
+}
+function renderStoredAssistant(m){
+  const wrap = el('msg assistant'); wrap.appendChild(el('role','Assistant'));
+  if (m.thinking){ const d=document.createElement('details'); d.className='think';
+    d.innerHTML='<summary>Thinking</summary><div class="tt"></div>'; d.querySelector('.tt').textContent=m.thinking; wrap.appendChild(d); }
+  const bubble = el('bubble'); wrap.appendChild(bubble); renderAnswer(wrap, bubble, m.content || '', m.citations || []);
+  if (m.citations && m.citations.length){ const c=el('cites','<h4>Sources</h4>'); m.citations.forEach((x,i)=>c.appendChild(citeEl(x,i))); wrap.appendChild(c); }
+  log.appendChild(wrap);
+}
+document.getElementById('newchat').onclick = newChat;
+document.getElementById('reset').onclick = newChat;
+
+// ---- view switching ----
+function showView(v){
+  document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.view===v));
+  document.getElementById('chatView').hidden = v!=='chat';
+  document.getElementById('sourceView').hidden = v!=='source';
+  document.getElementById('factsView').hidden = v!=='facts';
+  if (v==='source' && !filelist.dataset.loaded) loadFileList();
+  const fb = document.getElementById('factsBody');
+  if (v==='facts' && !fb.dataset.loaded){ fb.dataset.loaded='1'; loadFacts(); }
+}
+document.querySelectorAll('.nav button').forEach(b => b.onclick = () => showView(b.dataset.view));
+
+async function loadFileList(){
+  filelist.dataset.loaded = '1';
+  const r = await fetch('/api/documents');
+  if (!r.ok) { filelist.textContent = 'Unable to load.'; return; }
+  const groups = {};
+  for (const d of (await r.json()).documents) (groups[d.source_type] ||= []).push(d);
+  filelist.innerHTML = '';
+  for (const [type, docs] of Object.entries(groups)){
+    const g = el('group'); g.appendChild(el('ghead', esc(TYPE_LABELS[type]||type)));
+    for (const d of docs){
+      const a = el('file'); a.textContent = d.name; a.title = d.source_path; a.dataset.path = d.source_path;
+      a.onclick = () => openSource(d.source_path);
+      g.appendChild(a);
+    }
+    filelist.appendChild(g);
+  }
+}
+
+async function openSource(path){
+  showView('source');
+  document.querySelectorAll('.file').forEach(f => f.classList.toggle('active', f.dataset.path===path));
+  const body = document.getElementById('docBody');
+  document.getElementById('docName').textContent = 'Loading…';
+  document.getElementById('docPath').textContent = path;
+  body.innerHTML = '';
+  const r = await fetch('/api/document?path=' + encodeURIComponent(path));
+  if (!r.ok){ document.getElementById('docName').textContent='Not available'; body.innerHTML='<div class="hint">This source is not viewable.</div>'; return; }
+  const d = await r.json();
+  document.getElementById('docName').textContent = d.name;
+  if (d.format === 'messages'){
+    const f = document.createElement('iframe'); f.className='msgframe'; f.srcdoc = d.html; body.appendChild(f);
+  } else if (d.format === 'markdown'){
+    const x = el('bubble'); x.innerHTML = md(d.text); body.appendChild(x);
+  } else {
+    const pre = document.createElement('pre'); pre.className='raw'; pre.textContent = d.text; body.appendChild(pre);
+  }
+}
+
+// ---- case facts browse view ----
+function factSection(title, n, inner){
+  return `<details class="factsec" open><summary>${esc(title)} (${n})</summary><div class="facts-inner">${inner||'<div class="muted">none</div>'}</div></details>`;
+}
+function factSrcs(arr){
+  if (!arr || !arr.length) return '';
+  return '<div class="srcs">' + arr.map(s => `<a class="docview" data-path="${esc(s)}">${esc(s.split('/').pop())}</a>`).join('') + '</div>';
+}
+function sevClass(s){ s=(s||'').toLowerCase(); return s==='high'?'b-sev-high':s==='medium'?'b-sev-medium':'b-sev-low'; }
+
+async function loadFacts(){
+  const body = document.getElementById('factsBody');
+  body.innerHTML = '<div class="hint">Loading…</div>';
+  const r = await fetch('/api/casefacts');
+  if (!r.ok){ body.innerHTML = '<div class="hint">Case facts unavailable (dataset not built?).</div>'; return; }
+  const d = await r.json();
+  document.getElementById('factsCase').textContent = [d.case.case_number, d.case.jurisdiction].filter(Boolean).join(' · ');
+  let h = '';
+  h += factSection('Participants', d.participants.length, d.participants.map(p =>
+    `<div class="frow"><strong>${esc(p.canonical_name)}</strong> <span class="badge b-doc">${esc(p.role||'')}</span> <span class="muted">${esc(p.dob||'')}</span>${p.description?`<div class="muted">${esc(p.description)}</div>`:''}</div>`).join(''));
+  h += factSection('Timeline', d.timeline.length, d.timeline.map(t =>
+    `<div class="frow"><span class="muted">${esc(t.date||'')}</span> ${esc(t.event||'')} <span class="badge b-sev-low">${esc(t.category||'')}</span>${factSrcs(t.source_documents)}</div>`).join(''));
+  h += factSection('Facts', d.facts.length, d.facts.map(f =>
+    `<div class="frow"><strong>${esc(f.subject||'')}</strong> <span class="muted">${esc(f.predicate||'')}</span> ${esc(f.object||'')}${factSrcs(f.source_documents)}</div>`).join(''));
+  h += factSection('Flags', d.flags.length, d.flags.map(fl =>
+    `<div class="frow"><span class="badge ${sevClass(fl.severity)}">${esc(fl.severity||'')}</span> <strong>${esc(fl.type||'')}</strong>${fl.description?`<div class="muted">${esc(fl.description)}</div>`:''}${factSrcs(fl.documents)}</div>`).join(''));
+  h += factSection('Observations', d.observations.length, d.observations.map(o =>
+    `<div class="frow"><strong>${esc(o.observer||'')}</strong>: ${esc(o.claim||'')}${factSrcs(o.documents)}</div>`).join(''));
+  body.innerHTML = h;
+}
+document.getElementById('factsBody').addEventListener('click', e => { const a=e.target.closest('a.docview'); if(a){ e.preventDefault(); openSource(a.dataset.path); } });
+
+// ---- markdown (escape-then-transform; safe) ----
+function mdInline(s){
+  return s.replace(/`([^`]+)`/g,(m,c)=>'<code>'+c+'</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g,'$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+function md(src){
+  const lines = esc(src||'').replace(/\r\n?/g,'\n').split('\n');
+  let html='', para=[], inUl=false, inOl=false, inCode=false, code=[];
+  const flushP=()=>{ if(para.length){ html+='<p>'+mdInline(para.join(' '))+'</p>'; para=[]; } };
+  const closeL=()=>{ if(inUl){html+='</ul>';inUl=false;} if(inOl){html+='</ol>';inOl=false;} };
+  for (const raw of lines){
+    if(/^```/.test(raw)){ if(inCode){html+='<pre><code>'+code.join('\n')+'</code></pre>';code=[];inCode=false;} else {flushP();closeL();inCode=true;} continue; }
+    if(inCode){ code.push(raw); continue; }
+    let m;
+    if(m=raw.match(/^(#{1,4})\s+(.*)$/)){ flushP();closeL(); const n=m[1].length; html+=`<h${n}>${mdInline(m[2])}</h${n}>`; continue; }
+    if(m=raw.match(/^\s*[-*+]\s+(.*)$/)){ flushP(); if(inOl){html+='</ol>';inOl=false;} if(!inUl){html+='<ul>';inUl=true;} html+='<li>'+mdInline(m[1])+'</li>'; continue; }
+    if(m=raw.match(/^\s*\d+\.\s+(.*)$/)){ flushP(); if(inUl){html+='</ul>';inUl=false;} if(!inOl){html+='<ol>';inOl=true;} html+='<li>'+mdInline(m[1])+'</li>'; continue; }
+    if(m=raw.match(/^\s*>\s?(.*)$/)){ flushP();closeL(); html+='<blockquote>'+mdInline(m[1])+'</blockquote>'; continue; }
+    if(raw.trim()===''){ flushP();closeL(); continue; }
+    closeL(); para.push(raw);
+  }
+  if(inCode){ html+='<pre><code>'+code.join('\n')+'</code></pre>'; }
+  flushP(); closeL(); return html;
+}
+
+function citeEl(c, i){
+  const row = document.createElement('div'); row.className='cite';
+  let badge='', label='';
+  if (c.kind==='law'){ badge=`<span class="badge b-${c.binding_class||'non_authority'}">${esc(c.binding_class||'')}</span>`;
+    label = esc(c.citation||'(law)') + ` <span style="color:#6b7280">${esc(c.jurisdiction||'')} ${esc(c.doc_type||'')}</span>`; }
+  else if (c.kind==='document'){ badge=`<span class="badge b-doc">${esc(c.source_type||'doc')}</span>`; label=esc(c.title||c.source_path||''); }
+  else if (c.kind==='scripture'){ badge=`<span class="badge b-doc">${esc(c.translation||'scripture')}</span>`; label=esc(c.reference||'(verse)'); }
+  else if (c.kind==='pattern'){ badge=`<span class="badge b-doc">pattern</span>`; label=esc(c.card_name||'') + ` <span style="color:#6b7280">${esc(c.framework||'')}</span>`; }
+  else { badge=`<span class="badge b-doc">ref</span>`; label=esc(c.title||c.citation||''); }
+  const num = (i==null) ? '' : `<span class="num">${i+1}.</span> `;
+  row.innerHTML = num + badge + ' ';
+  const a = document.createElement('a'); a.className='srcref'; a.innerHTML = label;
+  a.onclick = (e) => { e.preventDefault(); openCitation(c); };
+  row.appendChild(a);
+  return row;
+}
+
+// ---- inline citation markers (Wikipedia-style) ----
+// The server resolves the model's source markers against the conversation's
+// citation pool and rewrites them to canonical [[CITE:n]] tokens, so here we
+// just render each token as a numbered superscript link into messageEl._cites.
+function renderAnswer(messageEl, bubble, answer, citations){
+  messageEl._cites = citations || [];
+  const html = md(answer || '').replace(/\[\[CITE:(\d+)\]\]/g,
+    (m, i) => `<sup class="ref" data-ci="${i}" title="source ${(+i)+1}">[${(+i)+1}]</sup>`);
+  bubble.innerHTML = html;
+}
+async function fetchPassage(kind, key){
+  try { const r = await fetch('/api/passage?kind='+encodeURIComponent(kind)+'&key='+encodeURIComponent(key));
+    return r.ok ? await r.json() : null; } catch(e){ return null; }
+}
+function renderPassageInto(body, text){
+  body.innerHTML = '';
+  const div = document.createElement('div'); div.className = 'passage';
+  (text || '(no passage text)').split(/\n\s*\n/).forEach(para => {
+    if (!para.trim()) return;
+    const p = document.createElement('p'); p.innerHTML = esc(para).replace(/\n/g, '<br>'); div.appendChild(p);
+  });
+  body.appendChild(div);
+}
+async function openCitation(c){
+  if (c.kind==='document' && c.source_path){ openSource(c.source_path); return; }
+  showView('source');
+  document.querySelectorAll('.file').forEach(f => f.classList.remove('active'));
+  const name = c.citation || c.reference || c.card_name || c.title || 'Source';
+  document.getElementById('docName').textContent = name;
+  document.getElementById('docPath').textContent = '';
+  const body = document.getElementById('docBody'); body.innerHTML = '<div class="hint">Loading…</div>';
+  let text = c.text || '', sub = '';
+  if (c.kind==='pattern' && c.card_id){ const p = await fetchPassage('pattern', c.card_id); if (p){ text = p.text; sub = (p.meta&&p.meta.framework)||''; } }
+  else if (c.kind==='law' && c.citation){ const p = await fetchPassage('law', c.citation); if (p){ text = p.text; sub = [p.meta&&p.meta.jurisdiction, p.meta&&p.meta.doc_type].filter(Boolean).join(' '); } }
+  else if (c.kind==='law'){ sub = [c.jurisdiction, c.doc_type].filter(Boolean).join(' '); }
+  else if (c.kind==='scripture'){ sub = c.translation || ''; }
+  document.getElementById('docPath').textContent = sub;
+  renderPassageInto(body, text);
+}
+
+function addUser(text){ const m=el('msg user'); m.appendChild(el('role','You')); m.appendChild(el('bubble', esc(text))); log.appendChild(m); log.scrollTop=log.scrollHeight; }
+
+async function ask(text){
+  const cid = await ensureConv();
+  addUser(text);
+  const m = el('msg assistant'); m.appendChild(el('role','Assistant'));
+  let think=null, thinkText='';
+  const tools = el('tools'); m.appendChild(tools);
+  const bubble = el('bubble spin',''); m.appendChild(bubble);
+  log.appendChild(m);
+
+  const resp = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text, conversation_id: cid})});
+  const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf='';
+  while(true){
+    const {value,done} = await reader.read(); if(done) break;
+    buf += dec.decode(value,{stream:true});
+    const parts = buf.split('\n\n'); buf = parts.pop();
+    for(const part of parts){
+      const line = part.split('\n').find(l=>l.startsWith('data:')); if(!line) continue;
+      const ev = JSON.parse(line.slice(5).trim());
+      if(ev.type==='thinking'){
+        if(!think){ think=document.createElement('details'); think.className='think';
+          think.innerHTML='<summary>Thinking</summary><div class="tt"></div>'; m.insertBefore(think, tools); }
+        thinkText += (thinkText?'\n':'') + ev.text; think.querySelector('.tt').textContent = thinkText;
+      } else if(ev.type==='tool_call'){
+        tools.appendChild(el('tool', `🔧 <code>${esc(ev.name)}</code>(${esc(JSON.stringify(ev.arguments))})`));
+      } else if(ev.type==='tool_result'){
+        const r=ev.result; const n = Array.isArray(r?.hits)?r.hits.length : Array.isArray(r?.events)?r.events.length
+          : Array.isArray(r?.verses)?r.verses.length : Array.isArray(r?.participants)?r.participants.length
+          : Array.isArray(r?.entities)?r.entities.length : '';
+        const last=tools.lastElementChild; if(last) last.innerHTML += ` <span class="res">→ ${n!==''?n+' result(s)':'ok'}</span>`;
+      } else if(ev.type==='answer'){
+        bubble.className='bubble'; renderAnswer(m, bubble, ev.answer, ev.citations||[]);
+        if(ev.citations && ev.citations.length){ const c=el('cites','<h4>Sources</h4>'); ev.citations.forEach((x,i)=>c.appendChild(citeEl(x,i))); m.appendChild(c); }
+      } else if(ev.type==='error'){ bubble.className='bubble'; bubble.innerHTML='<span style="color:#b91c1c">Error: '+esc(ev.error)+'</span>'; }
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+  bubble.classList.remove('spin');
+  loadChats();  // a new conversation's title appears after its first turn
+}
+
+// citation links → open the source; inline [n] markers → open that citation
+log.addEventListener('click', e => {
+  const a = e.target.closest('a.docview'); if(a){ e.preventDefault(); openSource(a.dataset.path); return; }
+  const ref = e.target.closest('sup.ref');
+  if(ref){ const msg = ref.closest('.msg'); const c = msg && msg._cites && msg._cites[+ref.dataset.ci]; if(c) openCitation(c); }
+});
+
+function submit(){ const t=input.value.trim(); if(!t){ return; } input.value=''; send.disabled=true; ask(t).finally(()=>{ send.disabled=false; input.focus(); }); }
+send.onclick = submit;
+input.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); submit(); } });
+
+// init: list saved chats and restore the active conversation (so a reload shows
+// exactly what was asked, matching the server-side context).
+loadChats();
+if (convId){ openChat(convId); }
+</script>
+</body>
+</html>
