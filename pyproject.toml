@@ -1,0 +1,52 @@
+[project]
+name = "case-chat"
+version = "0.1.0"
+description = "DiffusionGemma RAG chat POC over the synthetic case corpus and domain-knowledge corpus"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "httpx>=0.27",
+    "numpy>=1.26",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "qdrant-client>=1.10",
+    "pyyaml>=6.0",
+    "python-dateutil>=2.9",
+    "psycopg[binary]>=3.2",
+    "mcp>=1.2",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.optional-dependencies]
+# Local-dev embedding fallback (TEI is CUDA-only; on the Mac we serve the
+# SAME Qwen3-Embedding-4B over an OpenAI /embeddings route via this).
+localembed = [
+    "sentence-transformers>=3.0",
+    "torch>=2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["case_chat"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Vendored verbatim from ~/Source/RSMF_Viewer — don't lint/modify it here.
+extend-exclude = ["case_chat/vendor"]

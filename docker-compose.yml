@@ -1,0 +1,38 @@
+# Local-dev infrastructure for case-chat.
+#
+#   qdrant     — vector store for the re-embedded domain corpus + synthetic index
+#   pg-staging — THROWAWAY Postgres used only to read the knowledgedb pg_dump's
+#                good chunk text/metadata during re-embed. pgvector image so the
+#                dump's `halfvec(2560)` columns / `CREATE EXTENSION vector`
+#                restore cleanly. Its vectors are never read (Athena bug).
+#
+# The embedder is Ollama (qwen3-embedding:4b) running natively on the host, not
+# in this compose. The LLM (vLLM/DiffusionGemma) runs on the 5090, not here.
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: casechat-qdrant
+    ports:
+      - "6333:6333"   # REST
+      - "6334:6334"   # gRPC
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    restart: unless-stopped
+
+  pg-staging:
+    image: pgvector/pgvector:pg17
+    container_name: casechat-pg-staging
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: knowledgedb
+    ports:
+      - "5544:5432"   # matches settings.knowledgedb_staging_dsn
+    volumes:
+      - ./data/pg-staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d knowledgedb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped

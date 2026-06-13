@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.chunkhound
+data/
+tests/
+docs/
+*.log
+*.sqlite3
+.env
+deploy/.env
+dist/
+build/
+*.egg-info
