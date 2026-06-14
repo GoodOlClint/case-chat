@@ -18,11 +18,12 @@ terraform {
   }
 }
 
-# RunPod reads RUNPOD_API_KEY from the environment.
-provider "runpod" {}
+# Both API keys passed as variables (set via TF_VAR_* env or a gitignored
+# tfvars), matching the homelab convention.
+provider "runpod" {
+  api_key = var.runpod_api_key
+}
 
-# Vultr key passed as a variable (sourced from TF_VAR_vultr_api_key or tfvars),
-# matching the homelab convention.
 provider "vultr" {
   api_key = var.vultr_api_key
 }

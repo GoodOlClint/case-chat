@@ -1,4 +1,10 @@
 # ── Secrets (sensitive; supply via TF_VAR_* env or a gitignored tfvars) ──────
+variable "runpod_api_key" {
+  description = "RunPod API key (provider auth)."
+  type        = string
+  sensitive   = true
+}
+
 variable "vultr_api_key" {
   description = "Vultr API key (provider auth)."
   type        = string

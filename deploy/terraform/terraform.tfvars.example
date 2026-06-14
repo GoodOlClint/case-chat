@@ -1,8 +1,8 @@
 # Copy to terraform.tfvars (gitignored) and fill in. Secrets can instead be set
-# via env: export TF_VAR_vultr_api_key=… TF_VAR_hf_token=… etc.
-# RunPod auth is separate: export RUNPOD_API_KEY=… (read by the provider).
+# via env: export TF_VAR_runpod_api_key=… TF_VAR_vultr_api_key=… TF_VAR_hf_token=… etc.
 
 # --- secrets ---
+runpod_api_key  = "…"
 vultr_api_key   = "…"
 hf_token        = "hf_…"                 # Gemma license accepted on HF
 web_auth_secret = "…"                    # openssl rand -hex 32

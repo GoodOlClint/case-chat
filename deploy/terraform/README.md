@@ -24,9 +24,8 @@ A single `apply` builds both and wires the VPS to the GPU box.
 ```bash
 cd deploy/terraform
 
-export RUNPOD_API_KEY="…"          # RunPod provider (env only)
 cp terraform.tfvars.example terraform.tfvars   # fill in secrets + repo_url + public_base_url
-# (or export TF_VAR_vultr_api_key / TF_VAR_hf_token / TF_VAR_web_auth_secret / TF_VAR_tunnel_token)
+# (or export TF_VAR_runpod_api_key / TF_VAR_vultr_api_key / TF_VAR_hf_token / …)
 
 terraform init
 terraform apply
