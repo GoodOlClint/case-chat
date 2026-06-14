@@ -1,0 +1,20 @@
+# Single-5090 override: give the whole GPU to vLLM (DiffusionGemma wants the
+# activation headroom the recipe's --gpu-memory-utilization 0.85 assumes) by
+# moving TEI embeddings to CPU. On one 32GB card you can't fit NVFP4 DiffusionGemma
+# AND a GPU TEI comfortably; CPU embeddings are fine at query time (a handful of
+# vectors per request).
+#
+# Use (merges on top of the base stack):
+#   docker compose --env-file .env -f docker-compose.yml -f docker-compose.5090.yml up -d
+#
+# Index build caveat: embedding the ~114k knowledgedb chunks on CPU is slow. Either
+#   (a) transfer a prebuilt ./qdrant volume so no on-box embedding is needed, or
+#   (b) run the build profile FIRST with GPU TEI (before vLLM takes the card):
+#       docker compose --env-file .env --profile build run --rm builder
+#   then bring up serving with this override.
+services:
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    # Drop the base file's NVIDIA reservation entirely. An empty list still
+    # merges to the base value, so use the Compose `!reset` tag to clear it.
+    deploy: !reset null

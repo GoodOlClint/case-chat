@@ -44,12 +44,34 @@ services:
     image: vllm/vllm-openai:gemma
     restart: unless-stopped
     ipc: host
-    command: >
-      --model ${VLLM_MODEL}
-      --max-model-len ${VLLM_MAX_MODEL_LEN:-32768}
-      --gpu-memory-utilization ${VLLM_GPU_FRACTION:-0.6}
-      --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4
-      --host 0.0.0.0 --port 8000
+    # List form (not a folded string): the diffusion JSON flags must reach vLLM
+    # as literal argv, unmangled by shell/YAML quoting. The --generation-config,
+    # --max-num-seqs, --hf-overrides and --diffusion-config flags are REQUIRED by
+    # the block-diffusion architecture — see recipes.vllm.ai/Google/diffusiongemma.
+    command:
+      - --model
+      - ${VLLM_MODEL}
+      - --max-model-len
+      - "${VLLM_MAX_MODEL_LEN:-32768}"
+      - --max-num-seqs
+      - "${VLLM_MAX_NUM_SEQS:-4}"
+      - --gpu-memory-utilization
+      - "${VLLM_GPU_FRACTION:-0.85}"
+      - --generation-config
+      - vllm
+      - --hf-overrides
+      - '{"diffusion_sampler":"entropy_bound","diffusion_entropy_bound":0.1}'
+      - --diffusion-config
+      - '{"canvas_length": 256}'
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - gemma4
+      - --reasoning-parser
+      - gemma4
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
     volumes:
