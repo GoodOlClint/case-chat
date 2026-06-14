@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Secrets can instead be set
+# via env: export TF_VAR_vultr_api_key=… TF_VAR_hf_token=… etc.
+# RunPod auth is separate: export RUNPOD_API_KEY=… (read by the provider).
+
+# --- secrets ---
+vultr_api_key   = "…"
+hf_token        = "hf_…"                 # Gemma license accepted on HF
+web_auth_secret = "…"                    # openssl rand -hex 32
+tunnel_token    = "…"                    # Cloudflare Tunnel connector token
+
+# --- app bootstrap (required) ---
+repo_url        = "https://github.com/you/case-chat.git"   # reachable from the VPS
+public_base_url = "https://case-chat.example.com"          # your tunnel hostname
+
+# --- optional ---
+# repo_ref            = "main"
+# ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+# admin_ssh_cidr      = "203.0.113.7"   # your IP
+# admin_ssh_cidr_size = 32
+# vps_region          = "dfw"
+# vps_plan            = "vhf-4c-16gb"
+# corpus_tarball_url  = "https://…/corpus.tar.gz"
+# qdrant_tarball_url  = "https://…/qdrant.tar.gz"

@@ -1,0 +1,65 @@
+# App-side stack for the SPLIT deployment: web + Qdrant + CPU embeddings +
+# cloudflared on a CPU VPS (e.g. Vultr), pointed at a REMOTE vLLM (e.g. the
+# RunPod 5090 pod). No GPU services here — vLLM lives on the GPU box.
+#
+#   docker compose -f docker-compose.vps.yml --env-file .env up -d --build
+#
+# Required .env keys:
+#   CASECHAT_VLLM_BASE_URL   the remote vLLM OpenAI base URL (…/v1)
+#   VLLM_MODEL               the served model id (OpenAI "model" field)
+#   CASECHAT_WEB_AUTH_SECRET, TUNNEL_TOKEN, CASECHAT_WEB_PUBLIC_BASE_URL
+#   SYNTHETIC_CORPUS_PATH    host path to the case corpus (sqlite builds from it)
+#   QDRANT_DATA_PATH         host path holding the prebuilt Qdrant index
+name: case-chat-vps
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - ${QDRANT_DATA_PATH:-./data/qdrant}:/qdrant/storage   # prebuilt index
+    expose: ["6333"]
+
+  # Embeddings on CPU — vLLM owns the remote GPU, so TEI runs here without one.
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    restart: unless-stopped
+    command: ["--model-id", "${EMBEDDINGS_MODEL:-Qwen/Qwen3-Embedding-4B}", "--port", "80", "--auto-truncate"]
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - tei_data:/data
+    expose: ["80"]
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CASECHAT_VLLM_BASE_URL: ${CASECHAT_VLLM_BASE_URL}
+      CASECHAT_VLLM_MODEL: ${VLLM_MODEL}
+      CASECHAT_VLLM_SEND_CHAT_TEMPLATE_KWARGS: "true"
+      CASECHAT_EMBEDDINGS_BASE_URL: http://tei/v1
+      CASECHAT_EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-Qwen/Qwen3-Embedding-4B}
+      CASECHAT_QDRANT_URL: http://qdrant:6333
+      CASECHAT_SYNTHETIC_CORPUS_PATH: /corpus
+      CASECHAT_CASEDATA_SQLITE_PATH: /data/fake_case.sqlite3
+      CASECHAT_WEB_COOKIE_SECURE: "true"
+    volumes:
+      - ${SYNTHETIC_CORPUS_PATH}:/corpus:ro
+      - casedata:/data
+    expose: ["8080"]
+    depends_on: [qdrant, tei]
+
+  # Only ingress — outbound-only tunnel, so the VPS needs no open web ports.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN}"]
+    depends_on: [web]
+
+volumes:
+  tei_data:
+  casedata:

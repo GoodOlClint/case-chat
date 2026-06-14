@@ -1,0 +1,11 @@
+# Never commit state (holds the HF token, secrets, baked startup script) or
+# real tfvars.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+# .terraform.lock.hcl IS committed (pins provider hashes) — do not ignore it.

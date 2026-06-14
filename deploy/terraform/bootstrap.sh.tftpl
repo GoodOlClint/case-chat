@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# case-chat VPS bootstrap (Vultr boot startup script). Installs Docker, fetches
+# the app + data, writes the app .env wired to the remote vLLM, and brings up
+# the app-side stack. Idempotent — safe to re-run on reboot.
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+APP_DIR=/opt/case-chat
+CORPUS_DIR="$APP_DIR/data/corpus"
+QDRANT_DIR="$APP_DIR/data/qdrant"
+
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sh
+  systemctl enable --now docker
+fi
+
+if [ ! -d "$APP_DIR/.git" ]; then
+  git clone --branch "${repo_ref}" --depth 1 "${repo_url}" "$APP_DIR"
+fi
+cd "$APP_DIR"
+mkdir -p "$CORPUS_DIR" "$QDRANT_DIR"
+
+# Optional data from object storage: the case corpus (the sqlite builds from it)
+# and a prebuilt Qdrant index (so no on-box re-embedding).
+%{ if corpus_tarball_url != "" ~}
+if [ -z "$(ls -A "$CORPUS_DIR" 2>/dev/null)" ]; then curl -fsSL "${corpus_tarball_url}" | tar -xz -C "$CORPUS_DIR"; fi
+%{ endif ~}
+%{ if qdrant_tarball_url != "" ~}
+if [ -z "$(ls -A "$QDRANT_DIR" 2>/dev/null)" ]; then curl -fsSL "${qdrant_tarball_url}" | tar -xz -C "$QDRANT_DIR"; fi
+%{ endif ~}
+
+cat > deploy/.env <<EOF
+CASECHAT_VLLM_BASE_URL=${vllm_endpoint}
+VLLM_MODEL=${vllm_model}
+EMBEDDINGS_MODEL=${embeddings_model}
+HF_TOKEN=${hf_token}
+TUNNEL_TOKEN=${tunnel_token}
+CASECHAT_WEB_AUTH_SECRET=${web_auth_secret}
+CASECHAT_WEB_PUBLIC_BASE_URL=${public_base_url}
+CASECHAT_ACTIVE_JURISDICTION=${active_jurisdiction}
+SYNTHETIC_CORPUS_PATH=$CORPUS_DIR
+QDRANT_DATA_PATH=$QDRANT_DIR
+EOF
+
+docker compose -f deploy/docker-compose.vps.yml --env-file deploy/.env up -d --build
