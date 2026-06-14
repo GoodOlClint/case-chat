@@ -32,6 +32,37 @@ def test_citations_carry_passage_text_and_kinds() -> None:
     assert verses[0]["kind"] == "scripture" and verses[0]["text"] == "verse text"
 
 
+def test_case_tools_emit_resolvable_citations() -> None:
+    from case_chat.chat.orchestrator import _annotate_citations, _citations_from
+
+    overview = _citations_from("case_overview", {
+        "case": {"case_number": "04DR-25-1847", "jurisdiction": "Benton County, AR"},
+        "counts": {"facts": 12},
+        "participants": [{"id": "E001", "canonical_name": "Ryan Holcomb", "role": "petitioner"}],
+    })
+    # The overview record itself is a fallback-eligible Source; the roster rides
+    # along so [E001]-style markers resolve, but tagged out of the fallback.
+    assert overview[0]["kind"] == "case" and overview[0]["ref_id"] == "case_overview"
+    assert "04DR-25-1847" in overview[0]["text"] and "Ryan Holcomb" in overview[0]["text"]
+    assert overview[0].get("fallback", True) is True
+    roster = [c for c in overview if c["ref_id"] == "E001"]
+    assert roster and roster[0]["fallback"] is False
+
+    facts = _citations_from("case_facts_query", {"facts": [
+        {"id": "F011", "subject": "Kaylee", "predicate": "is daughter of", "object": "Gerald"},
+    ]})
+    assert facts[0]["kind"] == "case" and facts[0]["ref_id"] == "F011"
+    assert facts[0]["text"].startswith("Fact: F011")
+
+    # the bare markers the model writes must resolve against the pool — including
+    # participant ids like [E001] read off the case_overview roster.
+    pool = overview + facts
+    ans = "Ryan [E001] petitioned [case_overview]. Kaylee is Gerald's daughter [F011]."
+    out, cites = _annotate_citations(ans, pool)
+    assert out.count("[[CITE:") == 3
+    assert [c["ref_id"] for c in cites] == ["E001", "case_overview", "F011"]
+
+
 def test_annotate_citations_robust_matching() -> None:
     from case_chat.chat.orchestrator import _annotate_citations
 
@@ -151,6 +182,27 @@ async def test_citations_deduped_across_chunks() -> None:
     ])
     out = await ChatSession(model, FakeTools({"corpus_search": dup})).ask("q")
     assert len(out["citations"]) == 1  # same source_path collapsed
+
+
+async def test_case_overview_surfaces_source_without_inline_markers() -> None:
+    # Real-world case: the model calls only case_overview and writes a prose
+    # answer with NO bracketed markers. The fallback must still surface the
+    # overview as a Source (a single clean record, not the whole roster).
+    overview = json.dumps({
+        "case": {"case_number": "04DR-25-1847", "corpus_name": "Holcomb Family Guardianship"},
+        "counts": {"facts": 12},
+        "participants": [
+            {"id": "E001", "canonical_name": "Ryan Holcomb", "role": "petitioner"},
+            {"id": "E002", "canonical_name": "Gerald Holcomb", "role": "respondent"},
+        ],
+    })
+    model = FakeModel([
+        {"role": "assistant", "content": "", "tool_calls": [_tool_call("case_overview", {})]},
+        {"role": "assistant", "content": "This is a guardianship matter with no brackets at all."},
+    ])
+    out = await ChatSession(model, FakeTools({"case_overview": overview})).ask("get me up to speed")
+    assert len(out["citations"]) == 1
+    assert out["citations"][0]["ref_id"] == "case_overview"
 
 
 async def test_direct_answer_without_tools() -> None:

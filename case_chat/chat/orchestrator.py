@@ -67,7 +67,10 @@ support a claim, say so.
 Attribute inline: after each specific claim, quote, or characterization, add a bracketed
 source marker using the source's EXACT title, filename, citation, or pattern-card name as
 shown in the tool results — e.g. [Text thread: Gerald & Ryan], [A.C.A. § 9-13-101],
-[Guilt-tripping and induced shame as control]. Never use a bare number like [1], and do
+[Guilt-tripping and induced shame as control]. For the structured case record, cite the
+row id shown in the tool result — a fact as [F011], a flag as [FLAG002], a timeline event
+as [T004], a participant/entity by name — or [case_overview] for the overview itself.
+Never use a bare number like [1], and do
 not write your own numbered Sources list — the system renders one. Put one source per
 bracket, or separate several with a semicolon: [Megan Trask Statement; Affidavit Peggy Prater]."""
 
@@ -142,6 +145,104 @@ def _citations_from(name: str, result: Any) -> list[dict[str, Any]]:
     for p in result.get("passages", []):
         out.append({"kind": "law", "citation": p.get("citation"), "doc_type": p.get("doc_type"),
                     "jurisdiction": p.get("jurisdiction"), "text": _text(p)})
+    out += _case_citations(name, result)
+    return out
+
+
+def _kv(*pairs: tuple[str, Any]) -> str:
+    """Render present key/value pairs as labeled lines for a citation body."""
+    return "\n".join(f"{k}: {v}" for k, v in pairs if v)
+
+
+def _case_cit(tool: str, ref_id: str | None, label: str, text: str) -> dict[str, Any]:
+    return {"kind": "case", "tool": tool, "ref_id": ref_id,
+            "label": label or ref_id or tool, "text": text}
+
+
+def _overview_cit(tool: str, result: dict[str, Any]) -> dict[str, Any]:
+    """The case_overview record: one citation matching the bare [case_overview] marker."""
+    case = result.get("case") or {}
+    meta = _kv(("Case", case.get("corpus_name")), ("Number", case.get("case_number")),
+               ("Jurisdiction", case.get("jurisdiction")), ("Description", case.get("description")))
+    roster = "\n".join(
+        f"- {p.get('canonical_name')} — {p.get('role') or p.get('type')}"
+        for p in result.get("participants", []) if p.get("canonical_name")
+    )
+    label = f"Case overview — {case.get('case_number') or case.get('corpus_name') or ''}"
+    return _case_cit(tool, "case_overview", label.strip(" —"),
+                     "\n\n".join(x for x in (meta, roster) if x))
+
+
+def _named(row: dict[str, Any]) -> str:
+    name = row.get("canonical_name") or ""
+    return name + (f" ({row.get('role')})" if row.get("role") else "")
+
+
+# Each structured row-list a case tool can return → (label, body) builders.
+# Keyed off result *content* (not tool name), so every tool that yields one of
+# these lists is covered uniformly. ``case_overview`` is handled separately.
+_CASE_ROWS: dict[str, Any] = {
+    "facts": (
+        lambda r: " ".join(x for x in (r.get("subject"), r.get("predicate"), r.get("object")) if x),
+        lambda r: _kv(("Fact", r.get("id")), ("Subject", r.get("subject")),
+                      ("Predicate", r.get("predicate")), ("Object", r.get("object")),
+                      ("Category", r.get("category")),
+                      ("Valid", " → ".join(x for x in (r.get("valid_from"), r.get("valid_to")) if x))),
+    ),
+    "flags": (
+        lambda r: f"{r.get('type') or 'flag'}: {(r.get('description') or '')[:80]}".strip(": "),
+        lambda r: _kv(("Flag", r.get("id")), ("Type", r.get("type")),
+                      ("Severity", r.get("severity")), ("Description", r.get("description"))),
+    ),
+    "observations": (
+        lambda r: f"{r.get('observer') or 'observation'}: {(r.get('claim') or '')[:80]}".strip(": "),
+        lambda r: _kv(("Observation", r.get("id")), ("Observer", r.get("observer")),
+                      ("Claim", r.get("claim")), ("Observed", r.get("observed_date")),
+                      ("Basis", r.get("claim_basis"))),
+    ),
+    "events": (
+        lambda r: f"{r.get('date') or ''} — {(r.get('event') or '')[:80]}".strip(" —"),
+        lambda r: _kv(("Timeline", r.get("id")), ("Date", r.get("date")),
+                      ("Event", r.get("event")), ("Category", r.get("category")),
+                      ("Notes", r.get("notes"))),
+    ),
+    "participants": (
+        _named,
+        lambda r: _kv(("Participant", r.get("canonical_name")), ("Role", r.get("role")),
+                      ("Type", r.get("type")), ("DOB", r.get("dob")),
+                      ("Description", r.get("description"))),
+    ),
+    "entities": (
+        _named,
+        lambda r: _kv(("Entity", r.get("canonical_name")), ("Role", r.get("role")),
+                      ("Aliases", ", ".join(r.get("aliases") or [])), ("DOB", r.get("dob")),
+                      ("Description", r.get("description"))),
+    ),
+}
+
+
+def _case_citations(name: str, result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Citations for the structured fake-case tools.
+
+    Each carries the stable row id the model cites inline (``F011``, ``FLAG002``,
+    ``T004``, ``E001`` …) plus a rendered ``text`` body, so the Sources panel
+    shows the record on click without a second fetch.
+    """
+    out: list[dict[str, Any]] = []
+    if name == "case_overview":
+        out.append(_overview_cit(name, result))
+        # The roster is in the pool so the model's [E002]-style participant
+        # markers resolve, but tagged fallback=False so a marker-less answer
+        # falls back to the single overview Source, not the whole roster.
+        label_of, body_of = _CASE_ROWS["participants"]
+        for p in result.get("participants", []):
+            cit = _case_cit(name, p.get("id"), (label_of(p) or "").strip(), body_of(p))
+            cit["fallback"] = False
+            out.append(cit)
+        return out
+    for key, (label_of, body_of) in _CASE_ROWS.items():
+        for row in result.get(key, []):
+            out.append(_case_cit(name, row.get("id"), (label_of(row) or "").strip(), body_of(row)))
     return out
 
 
@@ -156,6 +257,8 @@ def _citation_key(c: dict[str, Any]) -> tuple:
         return ("scripture", c.get("reference"), c.get("translation"))
     if kind == "pattern":
         return ("pattern", c.get("card_id") or c.get("card_name"), None)
+    if kind == "case":
+        return ("case", c.get("ref_id"), None)
     return (kind, c.get("title") or c.get("citation"), None)
 
 
@@ -194,6 +297,8 @@ def _cite_labels(c: dict[str, Any]) -> list[str]:
         out += [c.get("reference")]
     elif kind == "pattern":
         out += [c.get("card_name"), c.get("card_id")]
+    elif kind == "case":
+        out += [c.get("ref_id"), c.get("label")]
     else:
         out += [c.get("title"), c.get("citation"), c.get("name")]
     return [x for x in out if x]
@@ -288,7 +393,10 @@ class ChatSession:
         rewritten, cited = _annotate_citations(answer, self._cite_pool)
         if cited:
             return rewritten, cited
-        return answer, this_turn
+        # No markers resolved: show what we looked at, minus citations tagged
+        # out of the fallback (e.g. a case_overview roster — resolvable inline
+        # but too noisy to dump wholesale as Sources).
+        return answer, [c for c in this_turn if c.get("fallback", True)]
 
     def seed_history(self, turns: list[tuple[str, str]]) -> None:
         """Restore conversational context from saved (role, content) turns.
