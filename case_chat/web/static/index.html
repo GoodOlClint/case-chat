@@ -104,6 +104,40 @@
   .srcs a { font-size:.74rem; }
   .b-sev-high { background:#fee2e2; color:#991b1b; } .b-sev-medium { background:#fef9c3; color:#854d0e; }
   .b-sev-low { background:#f3f4f6; color:#4b5563; }
+  /* overview (landing summary) */
+  .ov { max-width:52rem; margin:0 auto; padding:1.3rem 1.2rem 3rem; }
+  .ov .hero { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1.1rem 1.2rem; }
+  .ov .hero h1 { margin:0 0 .2rem; font-size:1.35rem; }
+  .ov .hero .sub { color:var(--muted); font-size:.85rem; }
+  .ov .hero p.desc { margin:.6rem 0 0; line-height:1.5; }
+  .ov .actions { display:flex; flex-wrap:wrap; gap:.5rem; margin:.9rem 0 0; }
+  .ov .actions button { font:inherit; font-size:.85rem; padding:.45rem .8rem; border:1px solid var(--line); background:#fff; border-radius:8px; cursor:pointer; color:var(--fg); }
+  .ov .actions button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .ov .actions button:hover { filter:brightness(.97); }
+  .ov .stats { display:flex; flex-wrap:wrap; gap:.5rem; margin:1rem 0 0; }
+  .ov .stat { flex:1; min-width:6.5rem; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.6rem .7rem; cursor:pointer; text-align:left; font:inherit; color:var(--fg); }
+  .ov .stat:hover { border-color:var(--accent); }
+  .ov .stat .n { font-size:1.3rem; font-weight:700; line-height:1.1; }
+  .ov .stat .l { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .ov .block { margin:1.4rem 0 0; }
+  .ov .block > h3 { font-size:.95rem; margin:0 0 .55rem; display:flex; align-items:baseline; gap:.4rem; }
+  .ov .block > h3 .more { margin-left:auto; font-size:.76rem; font-weight:400; color:var(--accent); cursor:pointer; }
+  .ov .people { display:flex; flex-wrap:wrap; gap:.4rem; }
+  .ov .person { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:.3rem .75rem; font:inherit; font-size:.82rem; cursor:pointer; color:var(--fg); }
+  .ov .person:hover { border-color:var(--accent); }
+  .ov .person .r { color:var(--muted); font-size:.74rem; margin-left:.3rem; }
+  .ov .concern { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--line); border-radius:8px; padding:.5rem .75rem; margin:.4rem 0; }
+  .ov .concern.high { border-left-color:#dc2626; } .ov .concern.medium { border-left-color:#d97706; }
+  .ov .concern .ttl { font-weight:600; font-size:.86rem; }
+  .ov .concern .desc { color:#374151; font-size:.84rem; margin-top:.15rem; }
+  .ov ul.tl { list-style:none; margin:0; padding:0; }
+  .ov ul.tl li { display:flex; gap:.7rem; padding:.4rem 0; border-top:1px solid var(--line); font-size:.85rem; }
+  .ov ul.tl li:first-child { border-top:none; }
+  .ov ul.tl .d { color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums; min-width:6.2rem; }
+  .ov .docgroups { display:flex; flex-wrap:wrap; gap:.4rem; }
+  .ov .docgroup { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:.4rem .75rem; font:inherit; font-size:.82rem; cursor:pointer; color:var(--fg); }
+  .ov .docgroup:hover { border-color:var(--accent); }
+  .ov .docgroup .c { color:var(--muted); margin-left:.35rem; }
 </style>
 </head>
 <body>
@@ -111,7 +145,8 @@
   <aside class="sidebar">
     <div class="brand">case-chat</div>
     <div class="nav">
-      <button data-view="chat" class="active">💬 Chat</button>
+      <button data-view="overview" class="active">🏠 Overview</button>
+      <button data-view="chat">💬 Chat</button>
       <button data-view="facts">📇 Case facts</button>
       <button data-view="source">📁 Source data</button>
     </div>
@@ -123,6 +158,11 @@
     <div class="who" id="who"></div>
   </aside>
   <div class="content">
+    <!-- OVERVIEW VIEW -->
+    <section class="view" id="overviewView">
+      <div class="topbar"><h2>Case overview</h2><span class="docmeta" id="ovMeta"></span></div>
+      <div class="docbody"><div class="ov" id="ovBody"><div class="hint">Loading…</div></div></div>
+    </section>
     <!-- CHAT VIEW -->
     <section class="view" id="chatView">
       <div class="topbar"><h2>Chat</h2><span class="sp"></span><button id="reset">New conversation</button></div>
@@ -209,12 +249,15 @@ document.getElementById('reset').onclick = newChat;
 // ---- view switching ----
 function showView(v){
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.view===v));
+  document.getElementById('overviewView').hidden = v!=='overview';
   document.getElementById('chatView').hidden = v!=='chat';
   document.getElementById('sourceView').hidden = v!=='source';
   document.getElementById('factsView').hidden = v!=='facts';
   if (v==='source' && !filelist.dataset.loaded) loadFileList();
   const fb = document.getElementById('factsBody');
   if (v==='facts' && !fb.dataset.loaded){ fb.dataset.loaded='1'; loadFacts(); }
+  const ob = document.getElementById('ovBody');
+  if (v==='overview' && !ob.dataset.loaded){ ob.dataset.loaded='1'; loadOverview(); }
 }
 document.querySelectorAll('.nav button').forEach(b => b.onclick = () => showView(b.dataset.view));
 
@@ -288,6 +331,75 @@ async function loadFacts(){
 }
 document.getElementById('factsBody').addEventListener('click', e => { const a=e.target.closest('a.docview'); if(a){ e.preventDefault(); openSource(a.dataset.path); } });
 
+// ---- overview (landing summary, built from /api/casefacts + /api/documents) ----
+const ROLE_ORDER = ['petitioner','respondent','minor','child','mother','father','guardian',
+  'attorney','counsel','judge','evaluator','caseworker','nurse','counselor'];
+function roleRank(r){ r=(r||'').toLowerCase(); const i=ROLE_ORDER.findIndex(k=>r.includes(k)); return i<0?ROLE_ORDER.length:i; }
+function sevRank(s){ s=(s||'').toLowerCase(); if(s==='high')return 0; if(s==='medium')return 1; return 2; }
+
+async function loadOverview(){
+  const body = document.getElementById('ovBody');
+  body.innerHTML = '<div class="hint">Loading…</div>';
+  const [fr, dr] = await Promise.all([fetch('/api/casefacts'), fetch('/api/documents')]);
+  if (!fr.ok){ body.innerHTML = '<div class="hint">Case overview unavailable (dataset not built?).</div>'; return; }
+  const d = await fr.json();
+  const docs = dr.ok ? ((await dr.json()).documents || []) : [];
+  const meta = [d.case.case_number, d.case.jurisdiction].filter(Boolean).join(' · ');
+  document.getElementById('ovMeta').textContent = meta;
+
+  let h = `<div class="hero"><h1>${esc(d.case.corpus_name || 'Case overview')}</h1>`
+    + `<div class="sub">${esc(meta)}</div>`
+    + (d.case.description ? `<p class="desc">${esc(d.case.description)}</p>` : '')
+    + `<div class="actions"><button class="primary" data-go="chat">💬 Ask the assistant</button>`
+    + `<button data-go="facts">📇 Browse case facts</button>`
+    + `<button data-go="source">📁 Browse source documents</button></div></div>`;
+
+  const stats = [[d.participants.length,'People'],[d.timeline.length,'Timeline'],[d.facts.length,'Facts'],
+                 [d.flags.length,'Flags'],[d.observations.length,'Observations']];
+  h += '<div class="stats">' + stats.map(([n,l]) =>
+    `<button class="stat" data-go="facts"><div class="n">${n}</div><div class="l">${esc(l)}</div></button>`).join('') + '</div>';
+
+  const people = [...d.participants].sort((a,b)=>
+    roleRank(a.role)-roleRank(b.role) || (a.canonical_name||'').localeCompare(b.canonical_name||''));
+  h += `<div class="block"><h3>Key people <span class="more" data-go="facts">all ${d.participants.length} →</span></h3><div class="people">`
+    + people.map(p => `<button class="person" data-ask="Who is ${esc(p.canonical_name||'')} and what is their role in this case?">`
+      + `${esc(p.canonical_name||'')}${p.role?`<span class="r">${esc(p.role)}</span>`:''}</button>`).join('')
+    + '</div></div>';
+
+  if (d.flags.length){
+    const flags = [...d.flags].sort((a,b)=> sevRank(a.severity)-sevRank(b.severity)).slice(0,8);
+    h += `<div class="block"><h3>Key concerns <span class="more" data-go="facts">all ${d.flags.length} →</span></h3>`
+      + flags.map(fl => `<div class="concern ${esc((fl.severity||'').toLowerCase())}">`
+        + `<div class="ttl">${esc(fl.type||'Flag')} ${fl.severity?`<span class="badge ${sevClass(fl.severity)}">${esc(fl.severity)}</span>`:''}</div>`
+        + (fl.description?`<div class="desc">${esc(fl.description)}</div>`:'') + factSrcs(fl.documents) + '</div>').join('')
+      + '</div>';
+  }
+
+  if (d.timeline.length){
+    const recent = [...d.timeline].sort((a,b)=> (a.date||'').localeCompare(b.date||'')).slice(-8);
+    h += `<div class="block"><h3>Recent timeline <span class="more" data-go="facts">full timeline (${d.timeline.length}) →</span></h3><ul class="tl">`
+      + recent.map(t => `<li><span class="d">${esc(t.date||'')}</span><span>${esc(t.event||'')} ${factSrcs(t.source_documents)}</span></li>`).join('')
+      + '</ul></div>';
+  }
+
+  if (docs.length){
+    const groups = {};
+    for (const x of docs){ (groups[x.source_type] ||= []).push(x); }
+    h += `<div class="block"><h3>Case documents <span class="more" data-go="source">browse all (${docs.length}) →</span></h3><div class="docgroups">`
+      + Object.entries(groups).map(([t,arr]) => `<button class="docgroup" data-go="source">${esc(TYPE_LABELS[t]||t)}<span class="c">${arr.length}</span></button>`).join('')
+      + '</div></div>';
+  }
+  body.innerHTML = h;
+}
+
+// overview clicks: source-doc links, ask-about-person chips, nav jumps
+document.getElementById('ovBody').addEventListener('click', e => {
+  const src = e.target.closest('a.docview'); if (src){ e.preventDefault(); openSource(src.dataset.path); return; }
+  const aq = e.target.closest('[data-ask]'); if (aq){ showView('chat'); overviewAsk(aq.dataset.ask); return; }
+  const go = e.target.closest('[data-go]'); if (go){ showView(go.dataset.go); if (go.dataset.go==='chat') input.focus(); }
+});
+function overviewAsk(q){ if (send.disabled) return; send.disabled=true; ask(q).finally(()=>{ send.disabled=false; input.focus(); }); }
+
 // ---- markdown (escape-then-transform; safe) ----
 function mdInline(s){
   return s.replace(/`([^`]+)`/g,(m,c)=>'<code>'+c+'</code>')
@@ -323,6 +435,7 @@ function citeEl(c, i){
   else if (c.kind==='document'){ badge=`<span class="badge b-doc">${esc(c.source_type||'doc')}</span>`; label=esc(c.title||c.source_path||''); }
   else if (c.kind==='scripture'){ badge=`<span class="badge b-doc">${esc(c.translation||'scripture')}</span>`; label=esc(c.reference||'(verse)'); }
   else if (c.kind==='pattern'){ badge=`<span class="badge b-doc">pattern</span>`; label=esc(c.card_name||'') + ` <span style="color:#6b7280">${esc(c.framework||'')}</span>`; }
+  else if (c.kind==='case'){ badge=`<span class="badge b-doc">case</span>`; label=esc(c.label||c.ref_id||'') + ` <span style="color:#6b7280">${esc(c.ref_id||'')}</span>`; }
   else { badge=`<span class="badge b-doc">ref</span>`; label=esc(c.title||c.citation||''); }
   const num = (i==null) ? '' : `<span class="num">${i+1}.</span> `;
   row.innerHTML = num + badge + ' ';
@@ -359,7 +472,7 @@ async function openCitation(c){
   if (c.kind==='document' && c.source_path){ openSource(c.source_path); return; }
   showView('source');
   document.querySelectorAll('.file').forEach(f => f.classList.remove('active'));
-  const name = c.citation || c.reference || c.card_name || c.title || 'Source';
+  const name = c.citation || c.reference || c.card_name || c.label || c.title || 'Source';
   document.getElementById('docName').textContent = name;
   document.getElementById('docPath').textContent = '';
   const body = document.getElementById('docBody'); body.innerHTML = '<div class="hint">Loading…</div>';
@@ -425,10 +538,11 @@ function submit(){ const t=input.value.trim(); if(!t){ return; } input.value='';
 send.onclick = submit;
 input.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); submit(); } });
 
-// init: list saved chats and restore the active conversation (so a reload shows
-// exactly what was asked, matching the server-side context).
+// init: list saved chats and restore the active conversation into the log (so
+// the chat view still shows exactly what was asked), but land on the case
+// Overview as the front page.
 loadChats();
-if (convId){ openChat(convId); }
+(async () => { if (convId){ await openChat(convId); } showView('overview'); })();
 </script>
 </body>
 </html>
