@@ -11,6 +11,9 @@ Instruct/Query wrap) is fixed regardless of which server answers — see
 
 from __future__ import annotations
 
+import os
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +24,17 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator(
+        "knowledgedb_dump_path", "synthetic_corpus_path",
+        "casedata_sqlite_path", "conversations_sqlite_path", "web_revoked_path",
+        mode="after",
+    )
+    @classmethod
+    def _expand_user_paths(cls, v: str) -> str:
+        """Expand a leading ~ so home-relative path defaults resolve for any user
+        (a no-op for ./relative and absolute paths)."""
+        return os.path.expanduser(v)
 
     # --- Chat model (OpenAI-compatible /v1) --------------------------------
     # LOCAL DEV defaults point at Ollama serving `gemma4:e4b-mlx` — same model
